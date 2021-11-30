@@ -214,3 +214,7 @@ It is possible to try any combination of latent and hidden neurons as well as ot
 __6) Postprocess the results__
 
 Vamb will bin every input contig. Contigs that cannot be binned with other contigs will result in single-bin contigs. Therefore, the output of Vamb includes many tiny bins, which may be relevant if you are looking for e.g. plasmids or viruses, but not if you are looking for cellular genomes. These small bins may account for the large majority of bins. When using the output of Vamb, it is therefore critical to filter the output bins based on whatever criteria is relevant for your particular analysis. You could use a binning quality control tool such as CheckM, or align the bins to reference genomes, or simply filter away all bins smaller than, say, 500 kbp.
+=======
+# VAMB
+
+AAU 9th semester project
