@@ -18,45 +18,45 @@ sys.path.append('/home/fwolf/vamb')
 import vamb
 
 # Calculate TNF
-with open('/home/fwolf/az-af/scaffolds.fasta', 'rb') as contigfile:
+with open('/home/fwolf/reduced_az-af/scaffolds.fasta', 'rb') as contigfile:
     tnfs, contignames, lengths = vamb.parsecontigs.read_contigs(contigfile)
 
 # Calculate RPKM
-bamdir = '/home/fwolf/az-af/bams/'
+bamdir = '/home/fwolf/reduced_az-af/bams/'
 bampaths = [bamdir + filename for filename in os.listdir(bamdir) if filename.endswith('.bam')]
 rpkms = vamb.parsebam.read_bamfiles(bampaths)
 
 # Encode
-# vae = vamb.encode.VAE(nsamples=rpkms.shape[1])
+vae = vamb.encode.VAE()
+dataloader, mask, rpkm = vamb.encode.make_dataloader(rpkms, tnfs)
+vae.trainmodel(dataloader)
+latent = vae.encode(dataloader, rpkm.shape[0])
+vamb.encode.VAE.save(vae, '/home/fwolf/hidden_state/state.pt')
+
+# vae = vamb.encode.VAE.load('/home/fwolf/hidden_state/state.pt')
 # dataloader, mask = vamb.encode.make_dataloader(rpkms, tnfs)
 # vae.trainmodel(dataloader)
 # latent = vae.encode(dataloader)
-# vamb.encode.VAE.save(vae, '/home/fwolf/hidden_state/state_strong100.pt')
 
-vae = vamb.encode.VAE.load('/home/fwolf/hidden_state/state.pt')
-dataloader, mask = vamb.encode.make_dataloader(rpkms, tnfs)
-vae.trainmodel(dataloader)
-latent = vae.encode(dataloader)
+cluster_iterator = vamb.cluster.cluster(latent, labels=np.array(contignames)[mask])
+clusters = dict(cluster_iterator)
 
-# cluster_iterator = vamb.cluster.cluster(latent, labels=np.array(contignames)[mask])
-# clusters = dict(cluster_iterator)
-#
-#
-# def filterclusters(clusters, lengthof):
-#     filtered_bins = dict()
-#     for medoid, contigs in clusters.items():
-#         binsize = sum(lengthof[contig] for contig in contigs)
-#
-#         if binsize >= 200000:
-#             filtered_bins[medoid] = contigs
-#
-#     return filtered_bins
-#
-#
-# lengthof = dict(zip(contignames, lengths))
-# filtered_bins = filterclusters(vamb.vambtools.binsplit(clusters, '_'), lengthof)
-# print('Number of bins before splitting and filtering:', len(clusters))
-# print('Number of bins after splitting and filtering:', len(filtered_bins))
+
+def filterclusters(clusters, lengthof):
+    filtered_bins = dict()
+    for medoid, contigs in clusters.items():
+        binsize = sum(lengthof[contig] for contig in contigs)
+
+        if binsize >= 200000:
+            filtered_bins[medoid] = contigs
+
+    return filtered_bins
+
+
+lengthof = dict(zip(contignames, lengths))
+filtered_bins = filterclusters(vamb.vambtools.binsplit(clusters, '_'), lengthof)
+print('Number of bins before splitting and filtering:', len(clusters))
+print('Number of bins after splitting and filtering:', len(filtered_bins))
 
 # labels = []
 #
@@ -67,7 +67,7 @@ latent = vae.encode(dataloader)
 #     for i in cluster:
 #         labels[contignames.index(i)] = n
 #
-X_embedded = TSNE(n_components=2, learning_rate='auto', init='random').fit_transform(latent)
+# X_embedded = TSNE(n_components=2, learning_rate='auto', init='random').fit_transform(latent)
 #
 # fig = plt.figure()
 # ax = fig.add_subplot(111, projection='3d')
@@ -104,25 +104,25 @@ X_embedded = TSNE(n_components=2, learning_rate='auto', init='random').fit_trans
 # clustering = DBSCAN(eps=4).fit_predict(X_embedded)
 
 
-clustering = DBSCAN(eps=2.8).fit_predict(latent)
-
-clusters = {}
-bins = {}
-
-with open('/home/fwolf/az-af/clusters_tSNE.tsv', 'wt') as out_file:
-    tsv_writer = csv.writer(out_file, delimiter='\t')
-
-    for i, j in enumerate(clustering):
-        if str(j) not in bins.keys():
-            clusters[j] = 1
-            bins[str(j)] = [contignames[i]]
-        else:
-            clusters[j] += 1
-            bins[str(j)].append(contignames[i])
-        tsv_writer.writerow([str(j), contignames[i]])
-
-with open('/home/fwolf/az-af/scaffolds.fasta', 'rb') as file:
+# clustering = DBSCAN(eps=2.8).fit_predict(latent)
+#
+# clusters = {}
+# bins = {}
+#
+# with open('/home/fwolf/az-af/clusters_tSNE.tsv', 'wt') as out_file:
+#     tsv_writer = csv.writer(out_file, delimiter='\t')
+#
+#     for i, j in enumerate(clustering):
+#         if str(j) not in bins.keys():
+#             clusters[j] = 1
+#             bins[str(j)] = [contignames[i]]
+#         else:
+#             clusters[j] += 1
+#             bins[str(j)].append(contignames[i])
+#         tsv_writer.writerow([str(j), contignames[i]])
+#
+with open('/home/fwolf/reduced_az-af/scaffolds.fasta', 'rb') as file:
     fastadict = vamb.vambtools.loadfasta(file)
 
-bindir = '/home/fwolf/az-af/bins_tSNE'
-vamb.vambtools.write_bins(bindir, bins, fastadict, maxbins=500)
+bindir = '/home/fwolf/reduced_az-af/bins_tnf'
+vamb.vambtools.write_bins(bindir, filtered_bins, fastadict, maxbins=500)
