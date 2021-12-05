@@ -76,12 +76,12 @@ def make_dataloader(rpkm, tnf, batchsize=256, destroy=False, cuda=False):
 
     if destroy:
         rpkm = _vambtools.numpy_inplace_maskarray(rpkm, mask)
-        tnf = _vambtools.numpy_inplace_maskarray(tnf, mask)
+        # tnf = _vambtools.numpy_inplace_maskarray(tnf, mask)
     else:
         # The astype operation does not copy due to "copy=False", but the masking
         # operation does.
         rpkm = rpkm[mask].astype(_np.float32, copy=False)
-        tnf = tnf[mask].astype(_np.float32, copy=False)
+        # tnf = tnf[mask].astype(_np.float32, copy=False)
 
     # If multiple samples, normalize to sum to 1, else zscore normalize
     if rpkm.shape[1] > 1:
@@ -91,13 +91,13 @@ def make_dataloader(rpkm, tnf, batchsize=256, destroy=False, cuda=False):
 
     # Normalize arrays and create the Tensors (the tensors share the underlying memory)
     # of the Numpy arrays
-    _vambtools.zscore(tnf, axis=0, inplace=True)
-    # depthstensor = _torch.from_numpy(rpkm)
-    tnftensor = _torch.from_numpy(tnf)
+    # _vambtools.zscore(tnf, axis=0, inplace=True)
+    depthstensor = _torch.from_numpy(rpkm)
+    # tnftensor = _torch.from_numpy(tnf)
 
     # Create dataloader
     n_workers = 4 if cuda else 1
-    dataset = _TensorDataset(tnftensor)
+    dataset = _TensorDataset(depthstensor)
     dataloader = _DataLoader(dataset=dataset, batch_size=batchsize, drop_last=True,
                              shuffle=True, num_workers=n_workers, pin_memory=cuda)
 
@@ -125,23 +125,23 @@ class VAE(_nn.Module):
     0.99 and 0.0, respectively
     """
 
-    def __init__(self, nhiddens=None, nlatent=32, alpha=None,
+    def __init__(self, nsamples, nhiddens=None, nlatent=32, alpha=None,
                  beta=200, dropout=0.2, cuda=False):
         if nlatent < 1:
             raise ValueError('Minimum 1 latent neuron, not {}'.format(latent))
 
-        # if nsamples < 1:
-        #     raise ValueError('nsamples must be > 0, not {}'.format(nsamples))
+        if nsamples < 1:
+            raise ValueError('nsamples must be > 0, not {}'.format(nsamples))
 
         # If only 1 sample, we weigh alpha and nhiddens differently
         if alpha is None:
-            alpha = 0.15
+            alpha = 0.15 if nsamples > 1 else 0.50
 
         if nhiddens is None:
-            nhiddens = [512, 512]
+            nhiddens = [512, 512] if nsamples > 1 else [256, 256]
 
         if dropout is None:
-            dropout = 0.2
+            dropout = 0.2 if nsamples > 1 else 0.0
 
         if any(i < 1 for i in nhiddens):
             raise ValueError('Minimum 1 neuron per layer, not {}'.format(min(nhiddens)))
@@ -159,8 +159,8 @@ class VAE(_nn.Module):
 
         # Initialize simple attributes
         self.usecuda = cuda
-        # self.nsamples = nsamples
-        self.ntnf = 103
+        self.nsamples = nsamples
+        # self.ntnf = 103
         self.alpha = alpha
         self.beta = beta
         self.nhiddens = nhiddens
@@ -174,7 +174,7 @@ class VAE(_nn.Module):
         self.decodernorms = _nn.ModuleList()
 
         # Add all other hidden layers
-        for nin, nout in zip([self.ntnf] + self.nhiddens, self.nhiddens):
+        for nin, nout in zip([self.nsamples] + self.nhiddens, self.nhiddens):
             self.encoderlayers.append(_nn.Linear(nin, nout))
             self.encodernorms.append(_nn.BatchNorm1d(nout))
 
@@ -188,7 +188,7 @@ class VAE(_nn.Module):
             self.decodernorms.append(_nn.BatchNorm1d(nout))
 
         # Reconstruction (output) layer
-        self.outputlayer = _nn.Linear(self.nhiddens[0], self.ntnf)
+        self.outputlayer = _nn.Linear(self.nhiddens[0], self.nsamples)
 
         # Activation functions
         self.relu = _nn.LeakyReLU()
@@ -246,48 +246,48 @@ class VAE(_nn.Module):
         reconstruction = self.outputlayer(tensor)
 
         # Decompose reconstruction to depths and tnf signal
-        # depths_out = reconstruction.narrow(1, 0, self.nsamples)
-        tnf_out = reconstruction.narrow(1, 0, self.ntnf)
+        depths_out = reconstruction.narrow(1, 0, self.nsamples)
+        # tnf_out = reconstruction.narrow(1, self.nsamples, self.ntnf)
 
         # If multiple samples, apply softmax
-        # if self.nsamples > 1:
-        #     depths_out = _softmax(depths_out, dim=1)
+        if self.nsamples > 1:
+            depths_out = _softmax(depths_out, dim=1)
 
-        return tnf_out
+        return depths_out
 
-    def forward(self, tnf):
-        tensor = _torch.cat(tnf, 1)
+    def forward(self, depths):
+        tensor = _torch.cat(depths, 1)
         mu, logsigma = self._encode(tensor)
         latent = self.reparameterize(mu, logsigma)
-        tnf_out = self._decode(latent)
+        depths_out = self._decode(latent)
 
-        return tnf_out, mu, logsigma
+        return depths_out, mu, logsigma
 
-    def calc_loss(self, tnf_in, tnf_out, mu, logsigma):
+    def calc_loss(self, depths_in, depths_out, mu, logsigma):
         # If multiple samples, use cross entropy, else use SSE for abundance
-        # if self.nsamples > 1:
-        #     # Add 1e-9 to depths_out to avoid numerical instability.
-        #     ce = - ((depths_out + 1e-9).log() * depths_in).sum(dim=1).mean()
-        #     ce_weight = (1 - self.alpha) / _log(self.nsamples)
-        # else:
-        #     ce = (depths_out - depths_in).pow(2).sum(dim=1).mean()
-        #     ce_weight = 1 - self.alpha
+        if self.nsamples > 1:
+            # Add 1e-9 to depths_out to avoid numerical instability.
+            ce = - ((depths_out + 1e-9).log() * depths_in[0]).sum(dim=1).mean()
+            ce_weight = (1 - self.alpha) / _log(self.nsamples)
+        else:
+            ce = (depths_out - depths_in).pow(2).sum(dim=1).mean()
+            ce_weight = 1 - self.alpha
 
-        sse = (tnf_out - tnf_in[0]).pow(2).sum(dim=1).mean()
+        # sse = (tnf_out - tnf_in).pow(2).sum(dim=1).mean()
         kld = -0.5 * (1 + logsigma - mu.pow(2) - logsigma.exp()).sum(dim=1).mean()
-        sse_weight = self.alpha / self.ntnf
+        # sse_weight = self.alpha / self.ntnf
         kld_weight = 1 / (self.nlatent * self.beta)
-        loss = sse * sse_weight + kld * kld_weight
+        loss = ce * ce_weight + kld * kld_weight
 
-        return loss, sse, kld
+        return loss, ce, kld
 
     def trainepoch(self, data_loader, epoch, optimizer, batchsteps, logfile):
         self.train()
 
         epoch_loss = 0
         epoch_kldloss = 0
-        epoch_sseloss = 0
-        # epoch_celoss = 0
+        # epoch_sseloss = 0
+        epoch_celoss = 0
 
         if epoch in batchsteps:
             data_loader = _DataLoader(dataset=data_loader.dataset,
@@ -297,42 +297,42 @@ class VAE(_nn.Module):
                                       num_workers=data_loader.num_workers,
                                       pin_memory=data_loader.pin_memory)
 
-        for tnf_in in data_loader:
-            # depths_in.requires_grad = True
-            tnf_in[0].requires_grad = True
+        for depths_in in data_loader:
+            depths_in[0].requires_grad = True
+            # tnf_in.requires_grad = True
 
             if self.usecuda:
-                # depths_in = depths_in.cuda()
-                tnf_in = tnf_in.cuda()
+                depths_in = depths_in.cuda()
+                # tnf_in = tnf_in.cuda()
 
             optimizer.zero_grad()
 
-            tnf_out, mu, logsigma = self(tnf_in)
+            depths_out, mu, logsigma = self(depths_in)
 
-            loss, sse, kld = self.calc_loss(tnf_in, tnf_out, mu, logsigma)
+            loss, ce, kld = self.calc_loss(depths_in, depths_out, mu, logsigma)
 
             loss.backward()
             optimizer.step()
 
             epoch_loss += loss.data.item()
             epoch_kldloss += kld.data.item()
-            epoch_sseloss += sse.data.item()
-            # epoch_celoss += ce.data.item()
+            # epoch_sseloss += sse.data.item()
+            epoch_celoss += ce.data.item()
 
         if logfile is not None:
-            print('\tEpoch: {}\tLoss: {:.6f}\tSSE: {:.6f}\tKLD: {:.4f}\tBatchsize: {}'.format(
-                  epoch + 1,
-                  epoch_loss / len(data_loader),
-                  epoch_sseloss / len(data_loader),
-                  epoch_kldloss / len(data_loader),
-                  data_loader.batch_size,
-                  ), file=logfile)
+            print('\tEpoch: {}\tLoss: {:.6f}\tCE: {:.7f}\tKLD: {:.4f}\tBatchsize: {}'.format(
+                epoch + 1,
+                epoch_loss / len(data_loader),
+                epoch_celoss / len(data_loader),
+                epoch_kldloss / len(data_loader),
+                data_loader.batch_size,
+            ), file=logfile)
 
             logfile.flush()
 
         return data_loader
 
-    def encode(self, data_loader, lengths):
+    def encode(self, data_loader):
         """Encode a data loader to a latent representation with VAE
 
         Input: data_loader: As generated by train_vae
@@ -349,32 +349,32 @@ class VAE(_nn.Module):
                                       num_workers=1,
                                       pin_memory=data_loader.pin_memory)
 
-        # tnf_array = data_loader.dataset.tensors
-        # length = len(depths_array)
+        depths_array = data_loader.dataset.tensors
+        length = len(depths_array[0])
 
         # We make a Numpy array instead of a Torch array because, if we create
         # a Torch array, then convert it to Numpy, Numpy will believe it doesn't
         # own the memory block, and array resizes will not be permitted.
-        latent = _np.empty((lengths, self.nlatent), dtype=_np.float32)
+        latent = _np.empty((length, self.nlatent), dtype=_np.float32)
 
         row = 0
         with _torch.no_grad():
-            for tnf in new_data_loader:
+            for depths in new_data_loader:
                 # Move input to GPU if requested
-                # if self.usecuda:
-                #     # depths = depths.cuda()
-                #     tnf = tnf.cuda()
+                if self.usecuda:
+                    depths = depths.cuda()
+                    # tnf = tnf.cuda()
 
                 # Evaluate
-                out_tnf, mu, logsigma = self(tnf)
+                out_depths, mu, logsigma = self(depths)
 
-                # if self.usecuda:
-                #     mu = mu.cpu()
+                if self.usecuda:
+                    mu = mu.cpu()
 
                 latent[row: row + len(mu)] = mu
                 row += len(mu)
 
-        assert row == lengths
+        assert row == length
         return latent
 
     def save(self, filehandle):
@@ -383,13 +383,14 @@ class VAE(_nn.Module):
         Input: Path or binary opened filehandle
         Output: None
         """
-        state = {'alpha': self.alpha,
+        state = {'nsamples': self.nsamples,
+                 'alpha': self.alpha,
                  'beta': self.beta,
                  'dropout': self.dropout,
                  'nhiddens': self.nhiddens,
                  'nlatent': self.nlatent,
                  'state': self.state_dict(),
-                }
+                 }
 
         _torch.save(state, filehandle)
 
@@ -409,7 +410,7 @@ class VAE(_nn.Module):
         # Forcably load to CPU even if model was saves as GPU model
         dictionary = _torch.load(path, map_location=lambda storage, loc: storage)
 
-        # nsamples = dictionary['nsamples']
+        nsamples = dictionary['nsamples']
         alpha = dictionary['alpha']
         beta = dictionary['beta']
         dropout = dictionary['dropout']
@@ -417,7 +418,7 @@ class VAE(_nn.Module):
         nlatent = dictionary['nlatent']
         state = dictionary['state']
 
-        vae = cls(nhiddens, nlatent, alpha, beta, dropout, cuda)
+        vae = cls(nsamples, nhiddens, nlatent, alpha, beta, dropout, cuda)
         vae.load_state_dict(state)
 
         if cuda:

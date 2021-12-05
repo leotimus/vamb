@@ -1,5 +1,3 @@
-# bla
-
 import sys
 import os
 
@@ -27,10 +25,10 @@ bampaths = [bamdir + filename for filename in os.listdir(bamdir) if filename.end
 rpkms = vamb.parsebam.read_bamfiles(bampaths)
 
 # Encode
-vae = vamb.encode.VAE()
+vae = vamb.encode.VAE(nsamples=rpkms.shape[1])
 dataloader, mask, rpkm = vamb.encode.make_dataloader(rpkms, tnfs)
 vae.trainmodel(dataloader)
-latent = vae.encode(dataloader, rpkm.shape[0])
+latent = vae.encode(dataloader)
 # vamb.encode.VAE.save(vae, '/home/fwolf/hidden_state/state.pt')
 
 # vae = vamb.encode.VAE.load('/home/fwolf/hidden_state/state.pt')
@@ -119,9 +117,9 @@ plt.show()
 #             clusters[j] += 1
 #             bins[str(j)].append(contignames[i])
 #         tsv_writer.writerow([str(j), contignames[i]])
-#
+# #
 # with open('/home/fwolf/reduced_az-af/scaffolds.fasta', 'rb') as file:
 #     fastadict = vamb.vambtools.loadfasta(file)
 #
-# bindir = '/home/fwolf/reduced_az-af/bins_tnf'
+# bindir = '/home/fwolf/reduced_az-af/bins_rpkm'
 # vamb.vambtools.write_bins(bindir, filtered_bins, fastadict, maxbins=500)
