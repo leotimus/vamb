@@ -31,32 +31,32 @@ vae = vamb.encode.VAE()
 dataloader, mask, rpkm = vamb.encode.make_dataloader(rpkms, tnfs)
 vae.trainmodel(dataloader)
 latent = vae.encode(dataloader, rpkm.shape[0])
-vamb.encode.VAE.save(vae, '/home/fwolf/hidden_state/state.pt')
+# vamb.encode.VAE.save(vae, '/home/fwolf/hidden_state/state.pt')
 
 # vae = vamb.encode.VAE.load('/home/fwolf/hidden_state/state.pt')
 # dataloader, mask = vamb.encode.make_dataloader(rpkms, tnfs)
 # vae.trainmodel(dataloader)
 # latent = vae.encode(dataloader)
 
-cluster_iterator = vamb.cluster.cluster(latent, labels=np.array(contignames)[mask])
-clusters = dict(cluster_iterator)
-
-
-def filterclusters(clusters, lengthof):
-    filtered_bins = dict()
-    for medoid, contigs in clusters.items():
-        binsize = sum(lengthof[contig] for contig in contigs)
-
-        if binsize >= 200000:
-            filtered_bins[medoid] = contigs
-
-    return filtered_bins
-
-
-lengthof = dict(zip(contignames, lengths))
-filtered_bins = filterclusters(vamb.vambtools.binsplit(clusters, '_'), lengthof)
-print('Number of bins before splitting and filtering:', len(clusters))
-print('Number of bins after splitting and filtering:', len(filtered_bins))
+# cluster_iterator = vamb.cluster.cluster(latent, labels=np.array(contignames)[mask])
+# clusters = dict(cluster_iterator)
+#
+#
+# def filterclusters(clusters, lengthof):
+#     filtered_bins = dict()
+#     for medoid, contigs in clusters.items():
+#         binsize = sum(lengthof[contig] for contig in contigs)
+#
+#         if binsize >= 200000:
+#             filtered_bins[medoid] = contigs
+#
+#     return filtered_bins
+#
+#
+# lengthof = dict(zip(contignames, lengths))
+# filtered_bins = filterclusters(vamb.vambtools.binsplit(clusters, '_'), lengthof)
+# print('Number of bins before splitting and filtering:', len(clusters))
+# print('Number of bins after splitting and filtering:', len(filtered_bins))
 
 # labels = []
 #
@@ -67,25 +67,24 @@ print('Number of bins after splitting and filtering:', len(filtered_bins))
 #     for i in cluster:
 #         labels[contignames.index(i)] = n
 #
-# X_embedded = TSNE(n_components=2, learning_rate='auto', init='random').fit_transform(latent)
-#
+X_embedded = TSNE(n_components=2, learning_rate='auto', init='random').fit_transform(latent)
+
 # fig = plt.figure()
 # ax = fig.add_subplot(111, projection='3d')
-#
-# df = pd.DataFrame()
-# df["x"] = X_embedded[:, 0]
-# df["y"] = X_embedded[:, 1]
+
+df = pd.DataFrame()
+df["x"] = X_embedded[:, 0]
+df["y"] = X_embedded[:, 1]
 # df["z"] = X_embedded[:, 2]
-#
+
 # ax.set_xlabel("x")
 # ax.set_ylabel("y")
 # ax.set_zlabel("z")
 #
 # ax.scatter(df["x"], df["y"], df["z"], alpha=0.1)
-#
-# plt.show()
-# sns.scatterplot(data=df, x="x", y="y", alpha=0.1, hue=labels, palette="deep", legend=False)
-# plt.show()
+
+sns.scatterplot(data=df, x="x", y="y", alpha=0.1, palette="deep", legend=False)
+plt.show()
 
 # for i in range(1, 100):
 #
@@ -121,8 +120,8 @@ print('Number of bins after splitting and filtering:', len(filtered_bins))
 #             bins[str(j)].append(contignames[i])
 #         tsv_writer.writerow([str(j), contignames[i]])
 #
-with open('/home/fwolf/reduced_az-af/scaffolds.fasta', 'rb') as file:
-    fastadict = vamb.vambtools.loadfasta(file)
-
-bindir = '/home/fwolf/reduced_az-af/bins_tnf'
-vamb.vambtools.write_bins(bindir, filtered_bins, fastadict, maxbins=500)
+# with open('/home/fwolf/reduced_az-af/scaffolds.fasta', 'rb') as file:
+#     fastadict = vamb.vambtools.loadfasta(file)
+#
+# bindir = '/home/fwolf/reduced_az-af/bins_tnf'
+# vamb.vambtools.write_bins(bindir, filtered_bins, fastadict, maxbins=500)
