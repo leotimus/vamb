@@ -270,7 +270,7 @@ class VAE(_nn.Module):
             ce = - ((depths_out + 1e-9).log() * depths_in[0]).sum(dim=1).mean()
             ce_weight = (1 - self.alpha) / _log(self.nsamples)
         else:
-            ce = (depths_out - depths_in).pow(2).sum(dim=1).mean()
+            ce = (depths_out - depths_in[0]).pow(2).sum(dim=1).mean()
             ce_weight = 1 - self.alpha
 
         # sse = (tnf_out - tnf_in).pow(2).sum(dim=1).mean()

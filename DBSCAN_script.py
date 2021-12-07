@@ -16,11 +16,11 @@ sys.path.append('/home/fwolf/vamb')
 import vamb
 
 # Calculate TNF
-with open('/home/fwolf/reduced_az-af/scaffolds.fasta', 'rb') as contigfile:
+with open('/home/fwolf/cami_low/CAMI_low_RL_S001__insert_270_GoldStandardAssembly.fasta', 'rb') as contigfile:
     tnfs, contignames, lengths = vamb.parsecontigs.read_contigs(contigfile)
 
 # Calculate RPKM
-bamdir = '/home/fwolf/reduced_az-af/bams/'
+bamdir = '/home/fwolf/cami_low/bams/'
 bampaths = [bamdir + filename for filename in os.listdir(bamdir) if filename.endswith('.bam')]
 rpkms = vamb.parsebam.read_bamfiles(bampaths)
 
@@ -36,34 +36,34 @@ latent = vae.encode(dataloader)
 # vae.trainmodel(dataloader)
 # latent = vae.encode(dataloader)
 
-# cluster_iterator = vamb.cluster.cluster(latent, labels=np.array(contignames)[mask])
-# clusters = dict(cluster_iterator)
-#
-#
-# def filterclusters(clusters, lengthof):
-#     filtered_bins = dict()
-#     for medoid, contigs in clusters.items():
-#         binsize = sum(lengthof[contig] for contig in contigs)
-#
-#         if binsize >= 200000:
-#             filtered_bins[medoid] = contigs
-#
-#     return filtered_bins
-#
-#
-# lengthof = dict(zip(contignames, lengths))
-# filtered_bins = filterclusters(vamb.vambtools.binsplit(clusters, '_'), lengthof)
-# print('Number of bins before splitting and filtering:', len(clusters))
-# print('Number of bins after splitting and filtering:', len(filtered_bins))
+cluster_iterator = vamb.cluster.cluster(latent, labels=np.array(contignames)[mask])
+clusters = dict(cluster_iterator)
 
-# labels = []
-#
-# for i in range(len(contignames)):
-#     labels.append(0)
-#
-# for n, (medois, cluster) in enumerate(filtered_bins.items()):
-#     for i in cluster:
-#         labels[contignames.index(i)] = n
+
+def filterclusters(clusters, lengthof):
+    filtered_bins = dict()
+    for medoid, contigs in clusters.items():
+        binsize = sum(lengthof[contig] for contig in contigs)
+
+        if binsize >= 200000:
+            filtered_bins[medoid] = contigs
+
+    return filtered_bins
+
+
+lengthof = dict(zip(contignames, lengths))
+filtered_bins = filterclusters(vamb.vambtools.binsplit(clusters, '|'), lengthof)
+print('Number of bins before splitting and filtering:', len(clusters))
+print('Number of bins after splitting and filtering:', len(filtered_bins))
+
+labels = []
+
+for i in range(len(contignames)):
+    labels.append(0)
+
+for n, (medois, cluster) in enumerate(filtered_bins.items()):
+    for i in cluster:
+        labels[contignames.index(i)] = n
 #
 X_embedded = TSNE(n_components=2, learning_rate='auto', init='random').fit_transform(latent)
 
@@ -81,7 +81,7 @@ df["y"] = X_embedded[:, 1]
 #
 # ax.scatter(df["x"], df["y"], df["z"], alpha=0.1)
 
-sns.scatterplot(data=df, x="x", y="y", alpha=0.1, palette="deep", legend=False)
+sns.scatterplot(data=df, x="x", y="y", alpha=0.1, hue=np.array(labels)[mask], palette="deep", legend=False)
 plt.show()
 
 # for i in range(1, 100):
@@ -117,9 +117,9 @@ plt.show()
 #             clusters[j] += 1
 #             bins[str(j)].append(contignames[i])
 #         tsv_writer.writerow([str(j), contignames[i]])
-# #
-# with open('/home/fwolf/reduced_az-af/scaffolds.fasta', 'rb') as file:
-#     fastadict = vamb.vambtools.loadfasta(file)
 #
-# bindir = '/home/fwolf/reduced_az-af/bins_rpkm'
-# vamb.vambtools.write_bins(bindir, filtered_bins, fastadict, maxbins=500)
+with open('/home/fwolf/cami_low/CAMI_low_RL_S001__insert_270_GoldStandardAssembly.fasta', 'rb') as file:
+    fastadict = vamb.vambtools.loadfasta(file)
+
+bindir = '/home/fwolf/cami_low/bins_rpkm'
+vamb.vambtools.write_bins(bindir, filtered_bins, fastadict, maxbins=500)
