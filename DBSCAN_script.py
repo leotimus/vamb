@@ -18,11 +18,11 @@ sys.path.append('/home/fwolf/vamb')
 import vamb
 
 # Calculate TNF
-with open('/home/fwolf/reduced_az-af/scaffolds.fasta', 'rb') as contigfile:
+with open('/home/fwolf/cami_low/CAMI_low_RL_S001__insert_270_GoldStandardAssembly.fasta', 'rb') as contigfile:
     tnfs, contignames, lengths = vamb.parsecontigs.read_contigs(contigfile)
 
 # Calculate RPKM
-bamdir = '/home/fwolf/reduced_az-af/bams/'
+bamdir = '/home/fwolf/cami_low/bams/'
 bampaths = [bamdir + filename for filename in os.listdir(bamdir) if filename.endswith('.bam')]
 rpkms = vamb.parsebam.read_bamfiles(bampaths)
 
@@ -54,7 +54,7 @@ def filterclusters(clusters, lengthof):
 
 
 lengthof = dict(zip(contignames, lengths))
-filtered_bins = filterclusters(vamb.vambtools.binsplit(clusters, '_'), lengthof)
+filtered_bins = filterclusters(vamb.vambtools.binsplit(clusters, '|'), lengthof)
 print('Number of bins before splitting and filtering:', len(clusters))
 print('Number of bins after splitting and filtering:', len(filtered_bins))
 
@@ -121,8 +121,8 @@ plt.show()
 #             bins[str(j)].append(contignames[i])
 #         tsv_writer.writerow([str(j), contignames[i]])
 #
-# with open('/home/fwolf/reduced_az-af/scaffolds.fasta', 'rb') as file:
-#     fastadict = vamb.vambtools.loadfasta(file)
-# 
-# bindir = '/home/fwolf/reduced_az-af/bins_tnf'
-# vamb.vambtools.write_bins(bindir, filtered_bins, fastadict, maxbins=500)
+with open('/home/fwolf/cami_low/CAMI_low_RL_S001__insert_270_GoldStandardAssembly.fasta', 'rb') as file:
+    fastadict = vamb.vambtools.loadfasta(file)
+
+bindir = '/home/fwolf/cami_low/bins_tnf'
+vamb.vambtools.write_bins(bindir, filtered_bins, fastadict, maxbins=500)
