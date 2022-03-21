@@ -10,3 +10,6 @@ changelog
 .ipynb_checkpoints
 build/
 dist/
+/.idea/*
+/.vscode/*
+
