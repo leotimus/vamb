@@ -177,9 +177,9 @@ class ClusterGenerator:
         self.attempts = _deque(maxlen=windowsize)
         self.successes = 0
 
-        histogram, kept_mask = self._init_histogram_kept_mask(len(indices))
+        histogram, keptMask = self._init_histogram_kept_mask(len(indices))
         self.histogram = histogram
-        self.kept_mask = kept_mask
+        self.kept_mask = keptMask
 
     # It's an iterator itself
     def __iter__(self):
